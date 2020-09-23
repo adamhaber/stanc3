@@ -3,6 +3,8 @@ open Middle
 open Dataflow_types
 open Mir_utils
 
+let unwrap_vexpr (VVar s : Dataflow_types.vexpr) : string = s
+
 (** Union maps, preserving the left element in a collision *)
 let union_maps_left (m1 : ('a, 'b) Map.Poly.t) (m2 : ('a, 'b) Map.Poly.t) :
     ('a, 'b) Map.Poly.t =
@@ -172,9 +174,9 @@ let build_cf_graphs ?(flatten_loops = false) ?(blocks_after_body = true)
           in
           (* Loop exits are:
            1. The loop node itself, since the last action of a typical loop execution is
-              to check if there are any iterations remaining
+            to check if there are any iterations remaining
            2. Break statements in the loop body, since broken loops don't execute the
-              loop statement
+            loop statement
         *)
           let loop_exits =
             if flatten_loops then substmt_state_unlooped.exits

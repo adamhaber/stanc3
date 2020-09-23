@@ -2,6 +2,8 @@ open Core_kernel
 open Middle
 open Dataflow_types
 
+val unwrap_vexpr : Dataflow_types.vexpr -> string
+
 val union_maps_left :
   ('a, 'b) Map.Poly.t -> ('a, 'b) Map.Poly.t -> ('a, 'b) Map.Poly.t
 (** Union maps, preserving the left element in a collision *)

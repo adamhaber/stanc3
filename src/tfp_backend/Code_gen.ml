@@ -14,6 +14,13 @@ let pystring_of_operator = function
   | Operator.Pow -> "**"
   | x -> strf "%a" Operator.pp x
 
+let pp_bound ppf {Expr.Fixed.pattern; _} =
+  match pattern with
+  | Var ident -> string ppf ident
+  | Lit (Str, s) -> pf ppf "%S" s
+  | Lit (_, s) -> pf ppf "%s" s
+  | _ -> failwith "shouldn't happen"
+
 let rec pp_expr ppf {Expr.Fixed.pattern; _} =
   match pattern with
   | Var ident -> string ppf ident
@@ -78,13 +85,45 @@ let rec pp_stmt ppf s =
   | Skip -> ()
   (* | Decl {decl_adtype= AutoDiffable; decl_id; _} ->
    *     pf ppf "%s = tf.Variable(0, name=%S, dtype=np.float64)" decl_id decl_id *)
+  | For {loopvar; lower; upper; body} -> (
+    match body.pattern with
+    | Block [l] | SList [l] -> (
+      match l.Stmt.Fixed.pattern with
+      | Assignment ((lhs, _, _), rhs) ->
+          let rhs_vars =
+            List.map ~f:Analysis_and_optimization.Dataflow_utils.unwrap_vexpr
+              (List.map ~f:fst
+                 (Set.Poly.to_list
+                    (Analysis_and_optimization.Mir_utils.expr_var_set rhs)))
+          in
+          if List.mem rhs_vars lhs ~equal:String.equal then
+            raise_s
+              [%message
+                "Left hand side of assignment is also in its right hand; Not \
+                 implemented"
+                  (s : Stmt.Located.t)]
+          else
+            pf ppf
+              "%s = tf__.vectorized_map(lambda %s : %a, tf__.range(%a-1, %a, \
+               dtype=tf__.float64))"
+              lhs loopvar pp_expr rhs pp_expr lower pp_expr upper
+      | TargetPE rhs ->
+          pf ppf
+            "target += tf__.reduce_sum(tf__.vectorized_map(lambda %s : %a, \
+             tf__.range(%a-1, %a)))"
+            loopvar pp_expr rhs pp_bound lower pp_bound upper
+      | _ ->
+          raise_s
+            [%message "Not implemented (within block)" (s : Stmt.Located.t)] )
+    | _ ->
+        raise_s
+          [%message "Not implemented (out of block)" (s : Stmt.Located.t)] )
   | Decl _ -> ()
   (* if else, for loop, while loop all need to create functions for
      their arguments. I think these functions need to be named and
      defined inline in general because lambdas are limited.
   *)
-  | IfElse (_, _, _) | While (_, _) | For _ | NRFunApp (CompilerInternal, _, _)
-    ->
+  | IfElse (_, _, _) | While (_, _) | NRFunApp (CompilerInternal, _, _) ->
       raise_s [%message "Not implemented" (s : Stmt.Located.t)]
 
 let pp_method ppf name params intro ?(outro = []) ppbody =
